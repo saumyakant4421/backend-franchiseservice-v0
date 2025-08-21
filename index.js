@@ -12,6 +12,11 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'Franchise Service is up and running' });
+});
+
 app.use('/api/franchises', franchiseRoutes);
 
 // Global error handler
