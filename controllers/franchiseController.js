@@ -3,7 +3,7 @@ const { searchFranchises, getFranchiseDetails } = require('../services/franchise
 
 // Handler for searching franchises by query
 const searchFranchisesHandler = async (req, res) => {
-  const { query } = req.query;
+  const query = req.query.q;
 
   // Validate query parameter
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
