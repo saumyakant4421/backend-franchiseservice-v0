@@ -3,6 +3,8 @@ const axios = require('axios');
 const { db } = require('../config/firebase');
 require('dotenv').config();
 const popularFranchises = require('../data/popularFranchises.json'); // Load custom franchises
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 24 * 60 * 60 }); 
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -53,14 +55,24 @@ const makeApiCall = async (url, params, retryCount = 0) => {
 };
 
 const searchFranchises = async (query) => {
+  const cacheKey = `search_${query.toLowerCase().replace(/\s+/g, '_')}`;
+  
+  // Check NodeCache first for faster access
+  if (cache.has(cacheKey)) {
+    console.log(`Serving franchise search for "${query}" from NodeCache`);
+    return cache.get(cacheKey);
+  }
+
   try {
-    const cacheKey = `search_${query.toLowerCase().replace(/\s+/g, '_')}`;
+    // Check Firebase cache as backup
     const cacheRef = db.collection('franchise_cache').doc(cacheKey);
     const cacheDoc = await cacheRef.get();
     if (cacheDoc.exists) {
       const cachedData = cacheDoc.data();
       if (cachedData.expires > Date.now()) {
-        console.log(`Returning cached results for query: ${query}`);
+        console.log(`Returning cached results for query: ${query} from Firebase`);
+        // Store in NodeCache for faster future access
+        cache.set(cacheKey, cachedData.results);
         return cachedData.results;
       }
     }
@@ -72,6 +84,9 @@ const searchFranchises = async (query) => {
     });
 
     const results = data.results || [];
+    
+    // Cache in both NodeCache and Firebase
+    cache.set(cacheKey, results);
     await cacheRef.set({
       results,
       expires: Date.now() + CACHE_DURATION,
@@ -89,6 +104,14 @@ const searchFranchises = async (query) => {
 };
 
 const getFranchiseDetails = async (franchiseId) => {
+  const cacheKey = `details_${franchiseId}`;
+  
+  // Check NodeCache first for faster access
+  if (cache.has(cacheKey)) {
+    console.log(`Serving franchise details for "${franchiseId}" from NodeCache`);
+    return cache.get(cacheKey);
+  }
+
   try {
     // Check if franchiseId is a custom franchise (e.g., 'mcu', 'dceu')
     const customFranchise = popularFranchises.franchises.find(f => f.id === franchiseId);
@@ -100,13 +123,15 @@ const getFranchiseDetails = async (franchiseId) => {
       throw new Error('Invalid collection ID');
     }
 
-    // Check cache
-    const cacheRef = db.collection('franchise_cache').doc(`details_${franchiseId}`);
+    // Check Firebase cache as backup
+    const cacheRef = db.collection('franchise_cache').doc(cacheKey);
     const cacheDoc = await cacheRef.get();
     if (cacheDoc.exists) {
       const cachedData = cacheDoc.data();
       if (cachedData.expires > Date.now()) {
-        console.log(`Returning cached details for franchiseId: ${franchiseId}`);
+        console.log(`Returning cached details for franchiseId: ${franchiseId} from Firebase`);
+        // Store in NodeCache for faster future access
+        cache.set(cacheKey, cachedData.results);
         return cachedData.results;
       }
     }
@@ -263,6 +288,8 @@ const getFranchiseDetails = async (franchiseId) => {
       totalBoxOffice,
     };
 
+    // Cache in both NodeCache and Firebase
+    cache.set(cacheKey, results);
     await cacheRef.set({
       results,
       expires: Date.now() + CACHE_DURATION,
@@ -279,4 +306,48 @@ const getFranchiseDetails = async (franchiseId) => {
   }
 };
 
-module.exports = { searchFranchises, getFranchiseDetails };
+// Fetch movies by franchise collection ID with caching
+const fetchMoviesByFranchise = async (collectionId) => {
+  const cacheKey = `franchise_${collectionId}`;
+  
+  // Check NodeCache first for faster access
+  if (cache.has(cacheKey)) {
+    console.log(`Serving franchise ${collectionId} from NodeCache`);
+    return cache.get(cacheKey);
+  }
+
+  try {
+    // Check Firebase cache as backup
+    const cacheRef = db.collection('franchise_cache').doc(cacheKey);
+    const cacheDoc = await cacheRef.get();
+    if (cacheDoc.exists) {
+      const cachedData = cacheDoc.data();
+      if (cachedData.expires > Date.now()) {
+        console.log(`Returning cached franchise movies for collection ${collectionId} from Firebase`);
+        // Store in NodeCache for faster future access
+        cache.set(cacheKey, cachedData.results);
+        return cachedData.results;
+      }
+    }
+
+    const data = await makeApiCall(`${TMDB_BASE_URL}/collection/${collectionId}`, {
+      api_key: TMDB_API_KEY,
+    });
+    
+    const results = data.parts || [];
+    
+    // Cache in both NodeCache and Firebase
+    cache.set(cacheKey, results);
+    await cacheRef.set({
+      results,
+      expires: Date.now() + CACHE_DURATION,
+    });
+    
+    return results;
+  } catch (error) {
+    console.error(`Error fetching franchise ${collectionId}:`, error.message);
+    return [];
+  }
+};
+
+module.exports = { searchFranchises, getFranchiseDetails, fetchMoviesByFranchise };

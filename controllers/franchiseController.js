@@ -1,5 +1,5 @@
 
-const { searchFranchises, getFranchiseDetails } = require('../services/franchiseService');
+const { searchFranchises, getFranchiseDetails, fetchMoviesByFranchise } = require('../services/franchiseService');
 
 // Handler for searching franchises by query
 const searchFranchisesHandler = async (req, res) => {
@@ -97,4 +97,47 @@ const getFranchiseDetailsHandler = async (req, res) => {
   }
 };
 
-module.exports = { searchFranchisesHandler, getFranchiseDetailsHandler };
+// Handler for fetching movies by franchise collection ID
+const fetchMoviesByFranchiseHandler = async (req, res) => {
+  const { collectionId } = req.params;
+
+  // Validate collectionId
+  if (!collectionId || (isNaN(collectionId) && typeof collectionId !== 'string')) {
+    return res.status(400).json({ 
+      error: 'Invalid collection ID', 
+      details: 'Collection ID must be a valid number or string' 
+    });
+  }
+
+  try {
+    const movies = await fetchMoviesByFranchise(collectionId);
+    if (!movies || movies.length === 0) {
+      return res.status(404).json({ 
+        error: 'No movies found', 
+        details: `No movies found for franchise collection ID: ${collectionId}` 
+      });
+    }
+
+    res.status(200).json(movies);
+  } catch (error) {
+    console.error('Controller Error in fetchMoviesByFranchiseHandler:', {
+      message: error.message,
+      stack: error.stack,
+      collectionId
+    });
+
+    const status = error.message.includes('not found') ? 404 : 500;
+    const details = error.message.includes('ECONNRESET')
+      ? 'Network error connecting to TMDB API. Please try again later.'
+      : error.message.includes('rate limit')
+      ? 'TMDB API rate limit exceeded. Please try again later.'
+      : error.message;
+
+    res.status(status).json({ 
+      error: 'Failed to fetch franchise movies', 
+      details 
+    });
+  }
+};
+
+module.exports = { searchFranchisesHandler, getFranchiseDetailsHandler, fetchMoviesByFranchiseHandler };
