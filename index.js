@@ -3,36 +3,26 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const admin = require('firebase-admin');
-const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
-const franchiseRoutes = require('./routes/franchiseRoutes');
 const logger = require('./config/logger');
 
 dotenv.config();
 
-const client = new SecretManagerServiceClient();
-
-// Async function to load Firebase service account
-async function loadFirebaseServiceAccount() {
-  try {
-    const [version] = await client.accessSecretVersion({
-      name: 'projects/streamverse-movie-12345/secrets/firebase-service-account/versions/latest', // Replace Project ID
-    });
-    return JSON.parse(version.payload.data.toString('utf8'));
-  } catch (error) {
-    console.error('Error loading Firebase secret:', error);
-    process.exit(1);
-  }
-}
-
-// Initialize app async
+// Simple initialization without Secret Manager for debugging
 async function initApp() {
   try {
-    // Initialize Firebase
-    const serviceAccount = await loadFirebaseServiceAccount();
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log('Firebase initialized');
+    console.log('Starting app initialization...');
+    
+    // Try to initialize Firebase with environment variable
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      console.log('Initializing Firebase with environment variable...');
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      console.log('Firebase initialized successfully');
+    } else {
+      console.warn('No Firebase configuration found, skipping Firebase initialization');
+    }
 
     const app = express();
 
@@ -41,37 +31,66 @@ async function initApp() {
     app.use(express.json());
 
     app.get('/', (req, res) => {
-      res.status(200).json({ message: 'Franchise Service is up and running' });
+      res.status(200).json({ 
+        message: 'Franchise Service is up and running',
+        timestamp: new Date().toISOString(),
+        env: process.env.NODE_ENV
+      });
     });
 
+    // Load routes AFTER Firebase initialization
+    const franchiseRoutes = require('./routes/franchiseRoutes');
     app.use('/api/franchises', franchiseRoutes);
 
     // Global error handler
     app.use((err, req, res, next) => {
+      console.error('Global error:', err);
       logger.error(err.stack);
       res.status(500).json({ error: 'Internal Server Error' });
     });
 
     // 404 handler
     app.use((req, res) => {
+      console.log(`Route not found: ${req.method} ${req.url}`);
       logger.warn(`Route not found: ${req.method} ${req.url}`);
       res.status(404).json({ error: `Route ${req.url} not found` });
     });
 
     // Start server
-    const PORT = process.env.FRANCHISE_PORT || 4014;
-    app.listen(PORT, () => {
+    const PORT = process.env.PORT || process.env.FRANCHISE_PORT || 8080;
+    console.log(`Starting server on port ${PORT}...`);
+    
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Franchise Service running on port ${PORT}`);
+      console.log(`✅ Health check endpoint: http://localhost:${PORT}/`);
       logger.info(`Franchise Service running on port ${PORT}`);
     });
 
-    // Handle uncaught exceptions and rejections
-    process.on('uncaughtException', (err) => logger.error('Uncaught Exception:', err));
-    process.on('unhandledRejection', (reason) => logger.error('Unhandled Rejection:', reason));
+    // Handle server startup errors
+    server.on('error', (err) => {
+      console.error('❌ Server startup error:', err);
+      logger.error('Server startup error:', err);
+    });
+
+    console.log('✅ App initialization completed');
 
   } catch (error) {
-    console.error('Failed to initialize app:', error);
+    console.error('❌ Failed to initialize app:', error);
+    logger.error('Failed to initialize app:', error);
     process.exit(1);
   }
 }
 
+// Handle uncaught exceptions and rejections
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled Rejection:', reason);
+  process.exit(1);
+});
+
+console.log('🚀 Starting Franchise Service...');
 initApp();

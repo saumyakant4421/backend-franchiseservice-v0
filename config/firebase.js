@@ -1,8 +1,24 @@
 // config/firebase.js
 const admin = require('firebase-admin');
 
-// Firebase will be initialized in index.js using Secret Manager
-// This module just provides access to the Firestore database
-const db = admin.firestore();
+// Firebase will be initialized in index.js
+// This module provides access to the Firestore database after initialization
+let db = null;
 
-module.exports = { db };
+function initDb() {
+  if (!db) {
+    try {
+      db = admin.firestore();
+    } catch (error) {
+      console.warn('Firebase not initialized yet, db will be null');
+      db = null;
+    }
+  }
+  return db;
+}
+
+module.exports = { 
+  get db() {
+    return initDb();
+  }
+};

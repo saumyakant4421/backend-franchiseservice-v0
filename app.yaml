@@ -1,0 +1,11 @@
+# App Engine configuration (if using App Engine instead of Cloud Run)
+runtime: nodejs20
+
+env_variables:
+  NODE_ENV: production
+  FRANCHISE_PORT: 8080
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6

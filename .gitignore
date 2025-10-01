@@ -15,4 +15,3 @@ dist/
 coverage/
 
 test-smtp.js
-dockerfile

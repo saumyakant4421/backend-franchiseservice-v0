@@ -1,0 +1,18 @@
+# Docker ignore file to reduce image size
+node_modules
+npm-debug.log
+.git
+.gitignore
+README.md
+.env
+.nyc_output
+coverage
+.nyc_output
+.coverage
+.coverage/
+Dockerfile
+.dockerignore
+combined.log
+error.log
+firebase-adminsdk.json
+firebaseServiceAccountKey.json
