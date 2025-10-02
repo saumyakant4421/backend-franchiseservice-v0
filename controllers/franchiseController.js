@@ -3,13 +3,14 @@ const { searchFranchises, getFranchiseDetails, fetchMoviesByFranchise } = requir
 
 // Handler for searching franchises by query
 const searchFranchisesHandler = async (req, res) => {
-  const query = req.query.q;
+  // Accept both 'q' and 'query' parameters for flexibility
+  const query = req.query.q || req.query.query;
 
   // Validate query parameter
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
     return res.status(400).json({ 
       error: 'Invalid search query', 
-      details: 'Search query is required and must be a non-empty string' 
+      details: 'Search query is required and must be a non-empty string (use ?q= or ?query=)' 
     });
   }
 
